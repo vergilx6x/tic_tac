@@ -1,88 +1,89 @@
-const board = ['', '', '', '', '', '', '', '', ''];
-let currentPlayer = 'X';
-let isGameActive = true;
-let isPlayerVsComputer = false;
+let socket;
+let playerSymbol;
 
-const winningConditions = [
-    [0, 1, 2],
-    [3, 4, 5],
-    [6, 7, 8],
-    [0, 3, 6],
-    [1, 4, 7],
-    [2, 5, 8],
-    [0, 4, 8],
-    [2, 4, 6]
-];
+document.addEventListener('DOMContentLoaded', function() {
+  socket = io();
 
-const cells = document.querySelectorAll('.cell');
-const resetButton = document.getElementById('reset');
-const modeButtons = document.querySelectorAll('input[name="mode"]');
+  const cells = document.querySelectorAll('.cell');
+  const resetButton = document.getElementById('reset');
+  const modeButtons = document.querySelectorAll('input[name="mode"]');
 
-function handleCellClick(e) {
+  socket.on('joined', (symbol) => {
+    playerSymbol = symbol;
+    document.getElementById("game-mode").style.display = "none";
+    document.getElementById("reset").style.display = "block";
+  });
+
+  socket.on('gameStarted', () => {
+    document.getElementById("loading").style.display = "none";
+  });
+
+  socket.on('gameFull', () => {
+    alert("Game is full. Please try again later.");
+    location.reload();
+  });
+
+  socket.on('playerLeft', () => {
+    alert("Your opponent left the game. Game over.");
+    location.reload();
+  });
+
+  cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+  resetButton.addEventListener('click', resetGame);
+
+  modeButtons.forEach(button => button.addEventListener('change', updateGameMode));
+
+  function handleCellClick(e) {
     const index = e.target.getAttribute('data-index');
 
-    if (board[index] !== '' || !isGameActive) return;
+    if (e.target.innerText !== '' || !playerSymbol) return;
 
-    // Place the current player's mark
-    board[index] = currentPlayer;
-    e.target.innerText = currentPlayer;
+    socket.emit("makeMove", index);
+  }
 
-    // Check if the current player has won
-    if (checkWinner()) {
-        alert(`${currentPlayer} wins!`);
-        isGameActive = false;
-        return;
-    }
-
-    // Check if the game is a draw
-    if (board.every(cell => cell !== '')) {
-        alert('Draw!');
-        isGameActive = false;
-        return;
-    }
-
-    // Switch players
-    currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
-
-    // If Player vs Computer mode and it's 'O's turn, let the computer play
-    if (isPlayerVsComputer && currentPlayer === 'O') {
-        computerMove();
-    }
-}
-
-function computerMove() {
-    let emptyCells = board.map((cell, index) => cell === '' ? index : null).filter(val => val !== null);
-    let randomIndex = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    board[randomIndex] = 'O';
-    cells[randomIndex].innerText = 'O';
-
-    // Check if the computer has won
-    if (checkWinner()) {
-        alert('O wins!');
-        isGameActive = false;
-        return;
-    }
-
-    currentPlayer = 'X';
-}
-
-function checkWinner() {
-    return winningConditions.some(condition => {
-        return condition.every(index => board[index] === currentPlayer);
-    });
-}
-
-function resetGame() {
-    board.fill('');
+  function resetGame() {
     cells.forEach(cell => cell.innerText = '');
-    currentPlayer = 'X';
-    isGameActive = true;
-}
+    socket.emit('reset');
+  }
 
-function updateGameMode() {
-    isPlayerVsComputer = document.querySelector('input[name="mode"]:checked').value === 'pvc';
-    resetGame();
-}
+  function updateGameMode() {
+    location.reload();
+  }
+
+  socket.on('updateBoard', ({ position, symbol }) => {
+    const cell = cells[position];
+    cell.innerText = symbol;
+
+    // Check if the game has ended
+    checkGameStatus(symbol);
+  });
+
+  function checkGameStatus(symbol) {
+    const winningConditions = [
+      [0, 1, 2],
+      [3, 4, 5],
+      [6, 7, 8],
+      [0, 3, 6],
+      [1, 4, 7],
+      [2, 5, 8],
+      [0, 4, 8],
+      [2, 4, 6]
+    ];
+
+    let board = Array.from(cells).map(cell => cell.innerText);
+
+    if (winningConditions.some(condition => condition.every(index => board[index] === symbol))) {
+      alert(`${symbol} wins!`);
+      resetGame();
+    }
+
+    if (!board.includes('')) {
+      alert('Draw!');
+      resetGame();
+    }
+  }
+});
+
 
 cells.forEach(cell => cell.addEventListener('click', handleCellClick));
 resetButton.addEventListener('click', resetGame);
